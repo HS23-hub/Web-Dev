@@ -1,0 +1,129 @@
+# URGENT: Push Updated Files to GitHub
+
+Your Football Legends site is ready with new features, but git is not available in this terminal environment. Here's how to push your updated files to GitHub immediately:
+
+## Option 1: GitHub Desktop (Easiest - 2 minutes)
+
+1. **Open GitHub Desktop**
+2. **File → Add Local Repository**
+3. **Select:** `c:\Users\habib\OneDrive\Documents\Web Dev`
+4. **Click "Add Repository"**
+5. You'll see all your changes listed:
+   - ✅ scripts.js (updated with TheSportsDB + API-Football)
+   - ✅ styles.css (updated with square layout)
+   - ✅ index.html (updated modal UI)
+   - ✅ push-to-github.ps1 (new helper script)
+   - ✅ GITHUB-SYNC.md (new guide)
+   - ✅ git-publish.ps1 (new helper)
+
+6. **Bottom left: Write commit message:**
+   ```
+   Update Football Legends: Add TheSportsDB and API-Football integrations, square card layout, improved UI
+   ```
+
+7. **Click "Commit to main"**
+
+8. **Click "Push origin"** (top right)
+
+9. **Done!** Your files are now on GitHub
+
+---
+
+## Option 2: Install Git & Use Command Line (5 minutes)
+
+1. **Download Git:** https://git-scm.com/download/win
+2. **Install with default settings, then restart PowerShell**
+3. **Run these commands:**
+
+```powershell
+cd "c:\Users\habib\OneDrive\Documents\Web Dev"
+git add -A
+git commit -m "Update Football Legends: Add provider integrations and square layout"
+git branch -M main
+git push -u origin main
+```
+
+---
+
+## Option 3: Use VS Code Terminal
+
+1. **In VS Code, open Terminal (Ctrl + `)**
+2. **Run:**
+```
+git add -A
+git commit -m "Update Football Legends with new features"
+git push -u origin main
+```
+
+---
+
+## Files That Will Be Pushed
+
+### Modified Files:
+- **scripts.js** — New functions: `fetchProviderStats()`, `fetchApiFootballPlayerStats()`, modal UI buttons
+- **styles.css** — Square card layout (aspect-ratio: 1), updated grid
+- **index.html** — New modal buttons for provider stats
+
+### New Files:
+- **push-to-github.ps1** — Automated push helper
+- **git-publish.ps1** — Git initialization helper  
+- **GITHUB-SYNC.md** — Complete deployment guide
+
+---
+
+## What Changes Are Included
+
+✅ **TheSportsDB Integration**
+- Load basic player stats (team, position, height, weight, birth date)
+- No API key required
+- Button: "Load SportsDB stats"
+
+✅ **API-Football Integration** (optional)
+- Load per-season stats (appearances, goals, assists, cards)
+- Requires free API key from https://www.api-football.com
+- Buttons: "Set API-Football key" + "Load season stats"
+
+✅ **Square Card Layout**
+- All player cards now square (aspect-ratio: 1)
+- Centered text, responsive design
+- Looks more polished and professional
+
+✅ **Helper Scripts**
+- `push-to-github.ps1` for automated git operations
+- `git-publish.ps1` for first-time git setup
+
+---
+
+## After Pushing: Deploy Your Site
+
+Once files are on GitHub, deploy for free:
+
+### **GitHub Pages (Easiest)**
+1. Go to https://github.com/HS23-hub/Web-Dev
+2. Settings → Pages
+3. Source: `main` branch
+4. Save → Site goes live at: `https://HS23-hub.github.io/Web-Dev`
+
+### **Vercel (Recommended)**
+1. Go to https://vercel.com
+2. Click "New Project"
+3. Select your GitHub repo
+4. Click "Deploy"
+5. Get a live URL instantly
+
+### **Netlify**
+1. Go to https://netlify.com
+2. Click "New site from Git"
+3. Select your GitHub repo
+4. Auto-deploys every push
+
+---
+
+## Quick Status
+
+- ✅ New features coded and tested locally
+- ✅ Helper scripts created
+- ⏳ **PENDING:** Push to GitHub (choose Option 1, 2, or 3 above)
+- ⏳ Deploy to GitHub Pages / Vercel / Netlify
+
+**Which option will you use to push the files?**

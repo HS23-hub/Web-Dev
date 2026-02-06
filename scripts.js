@@ -120,6 +120,136 @@ async function fetchStatsFromWiki(player){
   }catch(e){ console.warn('Stats fetch failed for', player.name, e); }
 }
 
+/* === External provider integration: TheSportsDB (free public key '1') ===
+const SPORTSDB_BASE = 'https://www.thesportsdb.com/api/v1/json/1';
+
+async function fetchProviderStats(player){
+  // Attempts to fetch player info from TheSportsDB by player name.
+  // Stores a compact object on player.providerStats for rendering.
+  try{
+    const api = `${SPORTSDB_BASE}/searchplayers.php?p=${encodeURIComponent(player.name)}`;
+    const res = await fetch(api);
+    if(!res.ok) throw new Error('provider fetch failed');
+    const json = await res.json();
+    const entry = (json && json.player && json.player.length) ? json.player[0] : null;
+    if(!entry){ player.providerStats = { available: false }; return player.providerStats; }
+
+    // Map relevant fields (TheSportsDB uses snake-case-like keys)
+    const stats = {
+      available: true,
+      playerId: entry.idPlayer || '',
+      team: entry.strTeam || entry.strTeam2 || '',
+      position: entry.strPosition || player.position || '',
+      height: entry.strHeight || '',
+      weight: entry.strWeight || '',
+      birthLocation: entry.strBirthLocation || '',
+      birthDate: entry.dateBorn || entry.strDateBorn || '',
+      description: entry.strDescriptionEN || '',
+      signing: entry.strSigning || '',
+      thumbnail: entry.strThumb || '',
+      cutouts: entry.strCutout || ''
+    };
+    player.providerStats = stats;
+    return stats;
+  }catch(e){ console.warn('Provider stats fetch failed for', player.name, e); player.providerStats = { available: false, error: e.message }; return player.providerStats; }
+}
+
+function renderProviderStatsInModal(player){
+  const container = document.getElementById('providerStats');
+  if(!container) return;
+  const s = player.providerStats;
+  if(!s){ container.innerHTML = '<div class="muted">No provider stats loaded. Click "Load SportsDB stats" to fetch.</div>'; return; }
+  if(s.available === false){ container.innerHTML = `<div class="muted">No provider data found for ${player.name}.</div>`; return; }
+
+  const parts = [];
+  if(s.team) parts.push(`<div><strong>Team:</strong> ${s.team}</div>`);
+  if(s.position) parts.push(`<div><strong>Position:</strong> ${s.position}</div>`);
+  if(s.height) parts.push(`<div><strong>Height:</strong> ${s.height}</div>`);
+  if(s.weight) parts.push(`<div><strong>Weight:</strong> ${s.weight}</div>`);
+  if(s.birthDate) parts.push(`<div><strong>Born:</strong> ${s.birthDate}${s.birthLocation ? ' · ' + s.birthLocation : ''}</div>`);
+  if(s.signing) parts.push(`<div><strong>Signing:</strong> ${s.signing}</div>`);
+  if(s.thumbnail) parts.push(`<div style="margin-top:8px"><img src="${s.thumbnail}" alt="${player.name}" class="provider-thumb fade-in" loading="lazy" style="max-width:120px;border-radius:6px"></div>`);
+  if(s.description) parts.push(`<div class="provider-desc">${s.description}</div>`);
+
+  container.innerHTML = parts.join('');
+  // ensure thumbnail fades in properly
+  const img = container.querySelector('img.provider-thumb'); if(img){ img.addEventListener('load', ()=> img.classList.add('loaded')); if(img.complete) img.classList.add('loaded'); }
+}
+
+/* === API-Football (per-season stats) integration scaffold ===
+// This requires an API key from https://www.api-football.com/ (or via RapidAPI).
+const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
+
+function getApiFootballKey(){ return localStorage.getItem('apiFootballKey') || ''; }
+function setApiFootballKey(k){ if(k) localStorage.setItem('apiFootballKey', k); else localStorage.removeItem('apiFootballKey'); }
+
+async function fetchApiFootballPlayerStats(player, season = new Date().getFullYear()-1){
+  // Searches player by name and requests season stats. Returns a compact stats object or { available:false }.
+  const key = getApiFootballKey();
+  if(!key) return { available: false, error: 'no-key' };
+  try{
+    // search endpoint by name + season
+    const searchUrl = `${API_FOOTBALL_BASE}/players?search=${encodeURIComponent(player.name)}&season=${encodeURIComponent(season)}`;
+    const res = await fetch(searchUrl, { headers: { 'x-apisports-key': key } });
+    if(!res.ok) throw new Error(`search failed ${res.status}`);
+    const j = await res.json();
+    if(!j || !j.response || !j.response.length) return { available:false };
+    // pick the first matching player (may require manual disambiguation in future)
+    const entry = j.response[0].player || j.response[0];
+    const team = (j.response[0].statistics && j.response[0].statistics[0] && j.response[0].statistics[0].team && j.response[0].statistics[0].team.name) || '';
+    // try fetch detailed stats for this player+season using player id if provided
+    const playerId = entry.id || (entry.player && entry.player.id) || null;
+    let statsObj = { available:true, playerId, team, season, raw: j };
+    if(playerId){
+      const statsUrl = `${API_FOOTBALL_BASE}/players?id=${encodeURIComponent(playerId)}&season=${encodeURIComponent(season)}`;
+      const r2 = await fetch(statsUrl, { headers: { 'x-apisports-key': key } });
+      if(r2.ok){
+        const j2 = await r2.json();
+        const stat = j2.response && j2.response[0] && j2.response[0].statistics && j2.response[0].statistics[0];
+        if(stat){
+          statsObj.appearances = stat.games && (stat.games.appearences || stat.games.appearances || stat.games.appearences === 0 ? stat.games.appearences || stat.games.appearances : undefined) || stat.games && stat.games.played || undefined;
+          statsObj.minutes = stat.games && stat.games.minutes || undefined;
+          statsObj.goals = stat.goals && (stat.goals.total || 0);
+          statsObj.assists = stat.goals && (stat.goals.assists || 0);
+          statsObj.yellow = stat.cards && (stat.cards.yellow || 0);
+          statsObj.red = stat.cards && (stat.cards.red || 0);
+          statsObj.position = stat.games && stat.games.position || statsObj.position || player.position;
+          statsObj.team = stat.team && stat.team.name || statsObj.team;
+        }
+        statsObj.rawFull = j2;
+      }
+    }
+    player.apiFootball = statsObj;
+    return statsObj;
+  }catch(e){ console.warn('API-Football fetch error', e); return { available:false, error: e.message }; }
+}
+
+function renderApiFootballStatsInModal(player){
+  const container = document.getElementById('apiFootballContainer');
+  if(!container) return;
+  const s = player.apiFootball;
+  if(!s){ container.innerHTML = '<div class="muted">No season stats loaded. Enter an API key and click "Load season stats".</div>'; return; }
+  if(s.available === false){
+    if(s.error === 'no-key') container.innerHTML = '<div class="muted">API key missing. Click "Set API key" to provide your API-Football key.</div>';
+    else container.innerHTML = '<div class="muted">No data found for this player/season.</div>';
+    return;
+  }
+  const rows = [];
+  rows.push(`<div><strong>Season:</strong> ${s.season}</div>`);
+  if(s.team) rows.push(`<div><strong>Team:</strong> ${s.team}</div>`);
+  if(s.position) rows.push(`<div><strong>Position:</strong> ${s.position}</div>`);
+  if(typeof s.appearances !== 'undefined') rows.push(`<div><strong>Appearances:</strong> ${s.appearances}</div>`);
+  if(typeof s.minutes !== 'undefined') rows.push(`<div><strong>Minutes:</strong> ${s.minutes}</div>`);
+  if(typeof s.goals !== 'undefined') rows.push(`<div><strong>Goals:</strong> ${s.goals}</div>`);
+  if(typeof s.assists !== 'undefined') rows.push(`<div><strong>Assists:</strong> ${s.assists}</div>`);
+  if(typeof s.yellow !== 'undefined') rows.push(`<div><strong>Yellow cards:</strong> ${s.yellow}</div>`);
+  if(typeof s.red !== 'undefined') rows.push(`<div><strong>Red cards:</strong> ${s.red}</div>`);
+
+  container.innerHTML = rows.join('');
+}
+
+
+
 /* Refresh stats for all players */
 async function refreshAllStats(){
   const btn = document.getElementById('refreshStatsBtn');
@@ -260,6 +390,18 @@ function openModal(player){
         <h2>${player.name}</h2>
         <p class="modal-meta"><em>${player.subtitle}</em></p>
         <p>${player.article.summary}</p>
+        <div style="margin-top:8px">
+          <button id="loadProviderStatsBtn" class="btn small" data-id="${player.id}">Load SportsDB stats</button>
+        </div>
+        <div id="providerStats" style="margin-top:10px"></div>
+        <div style="margin-top:10px; border-top:1px dashed #eee; padding-top:10px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="setApiFootballKeyBtn" class="btn small">Set API-Football key</button>
+            <input id="apiFootballSeason" class="small" type="number" min="2000" max="2100" value="2023" style="width:90px;padding:6px;border-radius:6px;border:1px solid #ddd">
+            <button id="loadApiFootballBtn" class="btn small" data-id="${player.id}">Load season stats (API-Football)</button>
+          </div>
+          <div id="apiFootballContainer" style="margin-top:8px"></div>
+        </div>
         <h4>Clubs</h4>
         <ul>${player.article.clubs.map(c => `<li>${c}</li>`).join('')}</ul>
         <h4>Key Stats</h4>
@@ -281,7 +423,47 @@ function openModal(player){
       openModal(player);
     });
   }
+  
+  // provider stats load button wiring
+  const loadProv = document.getElementById('loadProviderStatsBtn');
+  if(loadProv){
+    loadProv.addEventListener('click', async (e) => {
+      loadProv.disabled = true; const orig = loadProv.textContent; loadProv.textContent = 'Loading...';
+      try{
+        await fetchProviderStats(player);
+        renderProviderStatsInModal(player);
+      }catch(er){
+        const container = document.getElementById('providerStats'); if(container) container.innerHTML = `<div class="muted">Failed to load provider stats.</div>`;
+        console.warn('Provider load error', er);
+      }finally{ loadProv.textContent = orig; loadProv.disabled = false; }
+    });
+    // if provider stats are already present (cached), render immediately
+    if(player.providerStats) renderProviderStatsInModal(player);
+  }
 
+  // API-Football UI wiring
+  const setKeyBtn = document.getElementById('setApiFootballKeyBtn');
+  const loadApiBtn = document.getElementById('loadApiFootballBtn');
+  const seasonInput = document.getElementById('apiFootballSeason');
+  if(setKeyBtn){
+    setKeyBtn.addEventListener('click', ()=>{
+      const cur = getApiFootballKey();
+      const val = prompt('Paste your API-Football key (stored locally in this browser):', cur || '');
+      if(val !== null) { setApiFootballKey(val.trim()); alert(val ? 'Key saved in browser storage.' : 'Key cleared'); }
+    });
+  }
+  if(loadApiBtn){
+    loadApiBtn.addEventListener('click', async ()=>{
+      loadApiBtn.disabled = true; const orig = loadApiBtn.textContent; loadApiBtn.textContent = 'Loading...';
+      const season = (seasonInput && seasonInput.value) ? seasonInput.value : new Date().getFullYear()-1;
+      try{
+        const s = await fetchApiFootballPlayerStats(player, season);
+        renderApiFootballStatsInModal(player);
+        if(s && s.available === false && s.error === 'no-key') alert('No API key set. Click "Set API-Football key" to add one.');
+      }catch(e){ console.warn('Load API-Football failed', e); }
+      finally{ loadApiBtn.textContent = orig; loadApiBtn.disabled = false; }
+    });
+  }
   // ensure modal images and award images fade in smoothly
   modalBody.querySelectorAll('img.fade-in').forEach(img => {
     img.addEventListener('load', ()=> img.classList.add('loaded'));
@@ -367,7 +549,23 @@ function initScrollSpy(){
 const tocToggleBtn = document.getElementById('tocToggle');
 if(tocToggleBtn){ tocToggleBtn.addEventListener('click', ()=>{ const toc = document.getElementById('tocTop'); const expanded = toc.classList.toggle('open'); tocToggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false'); }); }
 
+/* Build top + sidebar TOC */
+function populateTOC(){
+  const top = document.getElementById('tocListTop');
+  const side = document.getElementById('tocListSide');
+  if(!top && !side) return;
+  const html = '<ul>' + players.map(p => `<li><a href="#player-${p.id}" data-id="${p.id}">${p.name}</a></li>`).join('') + '</ul>';
+  if(top) top.innerHTML = html;
+  if(side) side.innerHTML = html;
+  document.querySelectorAll('#tocListTop a, #tocListSide a').forEach(a => {
+    a.addEventListener('click', e => { e.preventDefault(); const id = a.dataset.id; gotoPlayer(id);
+      const toc = document.getElementById('tocTop'); const btn = document.getElementById('tocToggle'); if(toc && toc.classList.contains('open')){ toc.classList.remove('open'); btn.setAttribute('aria-expanded','false'); }
+    });
+  });
+}
+
 /* Init */
 function init(){ populateFilters(); filterAndSort(); populateTOC(); }
 
 document.addEventListener('DOMContentLoaded', init);
+
